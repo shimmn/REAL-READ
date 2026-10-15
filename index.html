@@ -2,7 +2,6 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- 모바일 전체화면 및 노치(Safe-area) 대응 뷰포트 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,8 +10,8 @@
     <title>REAL READ - 3줄 몰입 리더</title>
     <style>
         :root {
-            --font-size: 1.28rem;
-            --line-height: 2.0;
+            --font-size: 1.35rem;
+            --line-height: 2.1;
             --reader-width: 760px;
         }
 
@@ -24,22 +23,20 @@
         body {
             margin: 0;
             min-height: 100vh;
-            min-height: -webkit-fill-available;
             display: flex;
             flex-direction: column;
             align-items: center;
             background-color: #f8fafc;
             font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
             color: #0f172a;
-            padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
+            padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
             user-select: none;
         }
 
-        /* 텍스트 입력/설정 영역 */
         #input-section {
             width: 100%;
             max-width: var(--reader-width);
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -60,12 +57,12 @@
 
         #custom-text {
             width: 100%;
-            height: 65px;
+            height: 70px;
             padding: 10px 12px;
             border-radius: 12px;
             border: 1px solid #cbd5e1;
             background: #ffffff;
-            font-size: 0.88rem;
+            font-size: 0.9rem;
             line-height: 1.45;
             color: #1e293b;
             resize: vertical;
@@ -95,9 +92,7 @@
             cursor: pointer;
         }
 
-        .sub-btn:active {
-            background: #f1f5f9;
-        }
+        .sub-btn:active { background: #f1f5f9; }
 
         #apply-btn {
             padding: 7px 16px;
@@ -110,25 +105,23 @@
             cursor: pointer;
         }
 
-        #apply-btn:active {
-            background: #1e293b;
-        }
+        #apply-btn:active { background: #1e293b; }
 
-        /* 메인 리더 컨테이너 (모바일 100% 폭 대응) */
+        /* 메인 리더 컨테이너 */
         #reader-container {
             width: 100%;
             max-width: var(--reader-width);
             background: #ffffff;
             border-radius: 18px;
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04);
-            border: 1.5px solid #e2e8f0;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            border: 1.5px solid #cbd5e1;
             display: flex;
             flex-direction: column;
             position: relative;
             overflow: visible;
         }
 
-        /* PC용 리사이즈 핸들 */
+        /* 양쪽 모서리 마우스 호버 손잡이 */
         .resize-handle {
             position: absolute;
             top: 0;
@@ -140,27 +133,29 @@
             align-items: center;
             justify-content: center;
             touch-action: none;
+            user-select: none;
         }
 
         .resize-handle-left { left: -12px; }
         .resize-handle-right { right: -12px; }
 
         .resize-handle .handle-pill {
-            width: 20px;
-            height: 56px;
+            width: 22px;
+            height: 64px;
             background: #0f172a;
             border: 2px solid #ffffff;
-            border-radius: 10px;
+            border-radius: 11px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
             color: #ffffff;
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             font-weight: 900;
+            line-height: 1;
             opacity: 0;
             transform: scale(0.85);
-            transition: opacity 0.2s, transform 0.2s;
+            transition: opacity 0.2s ease, transform 0.2s ease;
             pointer-events: none;
         }
 
@@ -170,33 +165,39 @@
             transform: scale(1);
         }
 
+        #reader-container.is-resizing {
+            border-color: #0f172a;
+            box-shadow: 0 16px 44px rgba(15, 23, 42, 0.16);
+        }
+
         #width-tooltip {
             position: absolute;
-            top: -32px;
+            top: -36px;
             left: 50%;
             transform: translateX(-50%);
             background: #0f172a;
             color: #ffffff;
-            font-size: 0.78rem;
+            font-size: 0.82rem;
             font-weight: 700;
-            padding: 3px 12px;
-            border-radius: 12px;
+            padding: 4px 14px;
+            border-radius: 14px;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.15s;
+            white-space: nowrap;
         }
 
         #width-tooltip.visible { opacity: 1; }
 
         /* 3줄 포커스 뷰포트 */
         #viewport {
-            height: 330px;
+            height: 350px;
             position: relative;
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 20px;
+            padding: 0 28px;
             border-radius: 18px 18px 0 0;
             touch-action: pan-y;
         }
@@ -205,7 +206,7 @@
             position: absolute;
             left: 0;
             right: 0;
-            height: 60px;
+            height: 70px;
             pointer-events: none;
             z-index: 10;
         }
@@ -222,8 +223,8 @@
 
         #text-flow {
             position: absolute;
-            width: calc(100% - 40px);
-            left: 20px;
+            width: calc(100% - 56px);
+            left: 28px;
             top: 0;
             display: flex;
             flex-direction: column;
@@ -231,14 +232,15 @@
         }
 
         .line {
+            width: 100%;
             font-size: var(--font-size);
             line-height: var(--line-height);
             color: #cbd5e1;
             font-weight: 400;
             text-align: left;
-            word-break: keep-all;
+            word-break: break-word;
             transition: color 0.18s ease, font-weight 0.18s ease, opacity 0.18s ease;
-            opacity: 0.4;
+            opacity: 0.38;
             cursor: pointer;
         }
 
@@ -253,7 +255,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 12px 0;
+            padding: 14px 0;
             opacity: 0.35;
         }
 
@@ -261,7 +263,7 @@
 
         .line.image-line img {
             max-width: 100%;
-            max-height: 200px;
+            max-height: 220px;
             object-fit: contain;
             border-radius: 10px;
             box-shadow: 0 3px 12px rgba(15, 23, 42, 0.08);
@@ -270,10 +272,10 @@
 
         .image-caption {
             margin-top: 6px;
-            font-size: 0.76rem;
+            font-size: 0.78rem;
             color: #94a3b8;
             text-align: center;
-            line-height: 1.35;
+            line-height: 1.4;
             max-width: 90%;
         }
 
@@ -282,9 +284,9 @@
             font-weight: 500;
         }
 
-        /* 컨트롤러 영역 */
+        /* 컨트롤러 */
         #nav-controls {
-            padding: 10px 14px;
+            padding: 10px 16px;
             background: #f8fafc;
             border-top: 1px solid #f1f5f9;
             display: flex;
@@ -303,12 +305,12 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 7px 10px;
+            padding: 7px 11px;
             border-radius: 8px;
             border: 1px solid #cbd5e1;
             background: #ffffff;
             color: #0f172a;
-            font-size: 0.8rem;
+            font-size: 0.82rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.12s ease;
@@ -325,17 +327,17 @@
         }
 
         #progress-counter {
-            font-size: 0.8rem;
+            font-size: 0.82rem;
             font-weight: 600;
             color: #64748b;
             font-variant-numeric: tabular-nums;
         }
 
-        /* 조그 셔틀 컨트롤러 */
+        /* 조그 셔틀 */
         #shuttle-wrapper {
             background: #ffffff;
             border-top: 1px solid #e2e8f0;
-            padding: 10px 16px 14px;
+            padding: 10px 18px 14px;
             display: flex;
             flex-direction: column;
             gap: 6px;
@@ -345,7 +347,7 @@
         .shuttle-header {
             display: flex;
             justify-content: space-between;
-            font-size: 0.72rem;
+            font-size: 0.74rem;
             font-weight: 600;
             color: #64748b;
         }
@@ -379,7 +381,7 @@
             position: absolute;
             left: 50%;
             top: 50%;
-            width: 46px;
+            width: 48px;
             height: 30px;
             background: #0f172a;
             border-radius: 15px;
@@ -405,19 +407,18 @@
             opacity: 0.8;
         }
 
-        /* 스마트폰 화면 미디어 쿼리 (< 640px) */
         @media (max-width: 640px) {
             :root {
-                --font-size: 1.18rem;
-                --line-height: 1.9;
+                --font-size: 1.2rem;
+                --line-height: 2.0;
             }
 
             body {
-                padding: 8px 8px calc(14px + env(safe-area-inset-bottom));
+                padding: 10px 10px calc(16px + env(safe-area-inset-bottom));
             }
 
             #viewport {
-                height: 300px;
+                height: 320px;
                 padding: 0 16px;
             }
 
@@ -426,21 +427,19 @@
                 left: 16px;
             }
 
-            /* 모바일에서는 좌우 리사이즈 바 숨김 */
             .resize-handle {
                 display: none !important;
             }
 
             .nav-btn {
-                padding: 6px 8px;
-                font-size: 0.76rem;
+                padding: 6px 9px;
+                font-size: 0.78rem;
             }
         }
     </style>
 </head>
 <body>
 
-    <!-- 텍스트 입력 영역 -->
     <div id="input-section">
         <div class="input-header-bar">
             <span class="input-title">입력 텍스트</span>
@@ -449,18 +448,18 @@
         <textarea id="custom-text" placeholder="기사 텍스트를 붙여넣거나 아래 버튼을 누르세요...">한 단어씩 번쩍이며 지나가는 방식은 시선 고정 효과는 있지만 오랜 시간 집중할 때 눈의 피로도와 멀미를 유발할 수 있습니다.
 이제 3줄 단위로 문맥을 보존하며 읽는 새로운 몰입형 리더를 경험해 보세요.
 현재 읽고 있는 3줄만 또렷한 검은색으로 포커스되고, 나머지 주변 줄글은 은은한 회색으로 흐려집니다.
-모바일 화면에서는 본문을 손가락으로 가볍게 위아래로 쓸어올리거나, 하단 조그 셔틀을 엄지로 당겨 쾌적하게 넘겨보세요.</textarea>
+창 테두리에 마우스를 올리면 나타나는 손잡이를 당겨 원하는 너비로 맞추거나, 하단 조그 셔틀을 조작해 보세요.</textarea>
         <div class="action-row">
             <button id="paste-btn" class="sub-btn">📋 클립보드 붙여넣기</button>
             <button id="apply-btn">텍스트 적용하기</button>
         </div>
     </div>
 
-    <!-- 메인 리더 컨테이너 -->
     <div id="reader-container">
         <div id="width-tooltip">760px</div>
 
-        <div class="resize-handle resize-handle-left" id="handle-left">
+        <!-- 좌측 손잡이 -->
+        <div class="resize-handle resize-handle-left" id="handle-left" title="좌우로 당겨 창 너비 조절">
             <div class="handle-pill">⋮</div>
         </div>
 
@@ -496,7 +495,8 @@
             </div>
         </div>
 
-        <div class="resize-handle resize-handle-right" id="handle-right">
+        <!-- 우측 손잡이 -->
+        <div class="resize-handle resize-handle-right" id="handle-right" title="좌우로 당겨 창 너비 조절">
             <div class="handle-pill">⋮</div>
         </div>
     </div>
