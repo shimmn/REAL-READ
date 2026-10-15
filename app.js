@@ -13,6 +13,7 @@ const customTextInput = document.getElementById('custom-text');
 const applyBtn = document.getElementById('apply-btn');
 const pasteBtn = document.getElementById('paste-btn');
 const toggleInputBtn = document.getElementById('toggle-input-btn');
+const installAppBtn = document.getElementById('install-app-btn');
 
 const shuttleTrack = document.getElementById('shuttle-track');
 const shuttleThumb = document.getElementById('shuttle-thumb');
@@ -462,7 +463,6 @@ const endShuttleDrag = (e) => {
 shuttleTrack.addEventListener('pointerup', endShuttleDrag);
 shuttleTrack.addEventListener('pointercancel', endShuttleDrag);
 
-// PC 모서리 드래그 핸들
 let isResizing = false;
 let resizeSide = null;
 let startX = 0;
@@ -587,6 +587,43 @@ if (toggleInputBtn) {
 
 applyBtn.addEventListener('click', () => {
     loadText(customTextInput.value);
+});
+
+// ==========================================
+// 사용자 기록 무관 원클릭 앱 설치 (beforeinstallprompt)
+// ==========================================
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installAppBtn) {
+        installAppBtn.style.display = 'inline-flex';
+    }
+});
+
+if (installAppBtn) {
+    installAppBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) {
+            alert("브라우저 메뉴(점 3개 또는 공유 버튼)에서 '홈 화면에 추가' 또는 '앱 설치'를 눌러주세요.");
+            return;
+        }
+
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        if (outcome === 'accepted') {
+            installAppBtn.style.display = 'none';
+        }
+        deferredPrompt = null;
+    });
+}
+
+window.addEventListener('appinstalled', () => {
+    if (installAppBtn) {
+        installAppBtn.style.display = 'none';
+    }
+    deferredPrompt = null;
 });
 
 // ==========================================

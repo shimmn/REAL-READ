@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- PWA 파일명 manifest.json으로 정확히 1:1 매핑 -->
     <link rel="manifest" href="./manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -84,6 +83,7 @@
             display: flex;
             gap: 8px;
             justify-content: flex-end;
+            align-items: center;
         }
 
         .sub-btn {
@@ -98,6 +98,17 @@
         }
 
         .sub-btn:active { background: #f1f5f9; }
+
+        #install-app-btn {
+            display: none;
+            background: #0f172a;
+            color: #ffffff;
+            border: 1px solid #0f172a;
+        }
+
+        #install-app-btn:active {
+            background: #1e293b;
+        }
 
         #apply-btn {
             padding: 7px 16px;
@@ -450,6 +461,7 @@
 현재 읽고 있는 3줄만 또렷한 검은색으로 포커스되고, 나머지 주변 줄글은 은은한 회색으로 흐려집니다.
 창 테두리에 마우스를 올리면 나타나는 손잡이를 당겨 원하는 너비로 맞추거나, 하단 조그 셔틀을 조작해 보세요.</textarea>
         <div class="action-row">
+            <button id="install-app-btn" class="sub-btn">📲 앱 설치</button>
             <button id="paste-btn" class="sub-btn">📋 클립보드 붙여넣기</button>
             <button id="apply-btn">텍스트 적용하기</button>
         </div>
