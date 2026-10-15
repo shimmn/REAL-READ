@@ -11,6 +11,8 @@ const next3Btn = document.getElementById('next-3-btn');
 const progressCounter = document.getElementById('progress-counter');
 const customTextInput = document.getElementById('custom-text');
 const applyBtn = document.getElementById('apply-btn');
+const pasteBtn = document.getElementById('paste-btn');
+const toggleInputBtn = document.getElementById('toggle-input-btn');
 
 const shuttleTrack = document.getElementById('shuttle-track');
 const shuttleThumb = document.getElementById('shuttle-thumb');
@@ -32,6 +34,13 @@ let isShuttleDragging = false;
 let shuttleOffset = 0;
 let shuttlePixelOffset = 0;
 let isCoastingToStop = false;
+
+// 모바일 햅틱 진동 피드백 (지원 기기 전용)
+function triggerHaptic(duration = 10) {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(duration); } catch (e) {}
+    }
+}
 
 function isImageIndex(idx) {
     return lineElements[idx] && lineElements[idx].classList.contains('image-line');
@@ -87,7 +96,9 @@ function splitIntoLines(text) {
     const cleanedParagraphs = fixBrokenLineBreaks(text);
     const resultLines = [];
 
-    const lineLimit = Math.max(22, Math.floor((currentContainerWidth - 80) / 19));
+    // 모바일/PC 화면 실제 가로폭에 맞춘 한 줄 글자수
+    const actualWidth = readerContainer ? readerContainer.clientWidth : 760;
+    const lineLimit = Math.max(18, Math.floor((actualWidth - 48) / 18.5));
 
     cleanedParagraphs.forEach(paragraph => {
         if (/^!\[.*?\]\(.*?\)$/.test(paragraph.trim())) {
@@ -137,14 +148,14 @@ function loadText(text) {
             const src = imgMatch[2];
 
             const img = document.createElement('img');
+            img.referrerPolicy = 'no-referrer';
             img.src = src;
             img.alt = alt;
             img.loading = 'lazy';
 
+            img.onerror = () => { img.style.display = 'none'; };
             img.onload = () => {
-                if (idx === currentLineIdx) {
-                    goToLine(currentLineIdx);
-                }
+                if (idx === currentLineIdx) goToLine(currentLineIdx);
             };
 
             div.appendChild(img);
@@ -233,22 +244,16 @@ function goToLine(targetIdx) {
 
 function stepNext(stepSize) {
     if (currentLineIdx >= lineElements.length - 1) return;
+    triggerHaptic(12);
 
-    if (stepSize === 1) {
-        goToLine(currentLineIdx + 1);
-        return;
-    }
-
-    if (isImageIndex(currentLineIdx)) {
+    if (stepSize === 1 || isImageIndex(currentLineIdx)) {
         goToLine(currentLineIdx + 1);
         return;
     }
 
     let currentLastActive = currentLineIdx;
     for (let i = currentLineIdx; i <= Math.min(lineElements.length - 1, currentLineIdx + 2); i++) {
-        if (lineElements[i].classList.contains('active')) {
-            currentLastActive = i;
-        }
+        if (lineElements[i].classList.contains('active')) currentLastActive = i;
     }
 
     let nextStart = currentLastActive + 1;
@@ -276,6 +281,8 @@ function stepNext(stepSize) {
 
 function stepPrev(stepSize) {
     if (currentLineIdx <= 0) return;
+    triggerHaptic(12);
+
     if (stepSize === 1 || isImageIndex(currentLineIdx)) {
         goToLine(currentLineIdx - 1);
         return;
@@ -318,7 +325,12 @@ function physicsLoop() {
             textFlow.style.transform = `translateY(${currentY}px)`;
             lineElements.forEach(el => el.classList.add('active'));
 
-            currentLineIdx = findClosestLineIdx(currentY);
+            const newIdx = findClosestLineIdx(currentY);
+            if (newIdx !== currentLineIdx) {
+                currentLineIdx = newIdx;
+                triggerHaptic(6);
+            }
+
             updateCounter();
             updateButtons();
 
@@ -362,11 +374,13 @@ function physicsLoop() {
 }
 requestAnimationFrame(physicsLoop);
 
+// 버튼 이벤트
 prev3Btn.addEventListener('click', () => stepPrev(3));
 prev1Btn.addEventListener('click', () => stepPrev(1));
 next1Btn.addEventListener('click', () => stepNext(1));
 next3Btn.addEventListener('click', () => stepNext(3));
 
+// 키보드 조작
 window.addEventListener('keydown', (e) => {
     if (document.activeElement === customTextInput) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); stepNext(1); }
@@ -375,6 +389,7 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'PageUp') { e.preventDefault(); stepPrev(3); }
 });
 
+// PC 마우스 휠
 let wheelCooldown = false;
 viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -385,6 +400,36 @@ viewport.addEventListener('wheel', (e) => {
     setTimeout(() => { wheelCooldown = false; }, 160);
 }, { passive: false });
 
+// ==========================================
+// 모바일 본문 터치 스와이프 제스처 지원
+// ==========================================
+let touchStartY = 0;
+let touchStartX = 0;
+
+viewport.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+    }
+}, { passive: true });
+
+viewport.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1) {
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        const deltaX = e.changedTouches[0].clientX - touchStartX;
+
+        // 세로 스와이프 감지 (최소 30px 이동, 좌우 흔들림 방지)
+        if (Math.abs(deltaY) > 30 && Math.abs(deltaY) > Math.abs(deltaX)) {
+            if (deltaY < 0) {
+                stepNext(3); // 위로 쓸어올리면 다음 3줄
+            } else {
+                stepPrev(3); // 아래로 쓸어내리면 이전 3줄
+            }
+        }
+    }
+}, { passive: true });
+
+// 조그 셔틀 컨트롤러
 function handleShuttleMove(clientX) {
     const rect = shuttleTrack.getBoundingClientRect();
     const trackCenter = rect.left + rect.width / 2;
@@ -403,6 +448,7 @@ shuttleTrack.addEventListener('pointerdown', (e) => {
     isCoastingToStop = false;
     shuttleTrack.setPointerCapture(e.pointerId);
     handleShuttleMove(e.clientX);
+    triggerHaptic(15);
 });
 
 shuttleTrack.addEventListener('pointermove', (e) => {
@@ -427,7 +473,7 @@ const endShuttleDrag = (e) => {
 shuttleTrack.addEventListener('pointerup', endShuttleDrag);
 shuttleTrack.addEventListener('pointercancel', endShuttleDrag);
 
-// 리사이즈 드래그 핸들 이벤트
+// PC용 리사이즈 핸들
 let isResizing = false;
 let resizeSide = null;
 let startX = 0;
@@ -458,19 +504,14 @@ function setupResizeHandle(handleEl, side) {
         const deltaX = e.clientX - startX;
         let newWidth = initialWidth;
 
-        if (resizeSide === 'right') {
-            newWidth = initialWidth + deltaX * 2;
-        } else {
-            newWidth = initialWidth - deltaX * 2;
-        }
+        if (resizeSide === 'right') newWidth = initialWidth + deltaX * 2;
+        else newWidth = initialWidth - deltaX * 2;
 
         newWidth = Math.max(480, Math.min(1200, Math.round(newWidth)));
         currentContainerWidth = newWidth;
         document.documentElement.style.setProperty('--reader-width', `${newWidth}px`);
 
-        if (widthTooltip) {
-            widthTooltip.textContent = `${newWidth}px`;
-        }
+        if (widthTooltip) widthTooltip.textContent = `${newWidth}px`;
     });
 
     const endResize = (e) => {
@@ -498,11 +539,6 @@ function setupResizeHandle(handleEl, side) {
         } else if (anchorWords) {
             const foundIdx = allLines.findIndex(line => line.includes(anchorWords));
             if (foundIdx !== -1) restoredIdx = foundIdx;
-            else {
-                const firstWord = anchorWords.split(' ')[0];
-                const fallbackIdx = allLines.findIndex(line => line.includes(firstWord));
-                if (fallbackIdx !== -1) restoredIdx = fallbackIdx;
-            }
         }
 
         goToLine(restoredIdx);
@@ -515,30 +551,53 @@ function setupResizeHandle(handleEl, side) {
 setupResizeHandle(handleLeft, 'left');
 setupResizeHandle(handleRight, 'right');
 
+// 화면 리사이즈/가로세로 회전 시 자연스러운 재정렬
+window.addEventListener('resize', () => {
+    const savedIdx = currentLineIdx;
+    loadText(customTextInput.value);
+    goToLine(Math.min(savedIdx, allLines.length - 1));
+});
+
+// 모바일 클립보드 원터치 붙여넣기
+if (pasteBtn) {
+    pasteBtn.addEventListener('click', async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text && text.trim()) {
+                customTextInput.value = text;
+                loadText(text);
+                triggerHaptic(20);
+            } else {
+                alert("클립보드에 복사된 텍스트가 없습니다.");
+            }
+        } catch (err) {
+            alert("클립보드 접근 권한을 허용해 주세요.");
+        }
+    });
+}
+
+// 모바일 화면 넓게 쓰기용 입력창 접기 토글
+if (toggleInputBtn) {
+    let isCollapsed = false;
+    toggleInputBtn.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        customTextInput.style.display = isCollapsed ? 'none' : 'block';
+        toggleInputBtn.textContent = isCollapsed ? '펼치기 ▼' : '접기 ▲';
+    });
+}
+
 applyBtn.addEventListener('click', () => {
     loadText(customTextInput.value);
 });
 
-function applyExtractedText(text) {
-    if (!text || !text.trim()) return;
-    customTextInput.value = text;
-    loadText(text);
-}
-
 loadText(customTextInput.value);
 
+// 크롬 확장 프로그램 연동 유지
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(["rr_text"], (data) => {
         if (data && data.rr_text && data.rr_text.trim()) {
-            applyExtractedText(data.rr_text);
+            customTextInput.value = data.rr_text;
+            loadText(data.rr_text);
         }
     });
-
-    if (chrome.storage.onChanged) {
-        chrome.storage.onChanged.addListener((changes, area) => {
-            if (area === "local" && changes.rr_text && changes.rr_text.newValue) {
-                applyExtractedText(changes.rr_text.newValue);
-            }
-        });
-    }
 }
