@@ -462,9 +462,7 @@ const endShuttleDrag = (e) => {
 shuttleTrack.addEventListener('pointerup', endShuttleDrag);
 shuttleTrack.addEventListener('pointercancel', endShuttleDrag);
 
-// ==========================================
-// 양쪽 테두리 드래그 리사이즈 핸들 (앵커 텍스트 보존)
-// ==========================================
+// PC 모서리 드래그 핸들
 let isResizing = false;
 let resizeSide = null;
 let startX = 0;
@@ -591,7 +589,24 @@ applyBtn.addEventListener('click', () => {
     loadText(customTextInput.value);
 });
 
-loadText(customTextInput.value);
+// ==========================================
+// 안드로이드 Web Share Target & URL 파라미터 자동 로드
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedTitle = urlParams.get('title') || '';
+    const sharedText = urlParams.get('text') || '';
+    const sharedUrl = urlParams.get('url') || '';
+
+    const combinedContent = [sharedTitle, sharedText, sharedUrl].filter(Boolean).join('\n\n');
+    
+    if (combinedContent.trim()) {
+        customTextInput.value = combinedContent;
+        loadText(combinedContent);
+    } else {
+        loadText(customTextInput.value);
+    }
+});
 
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(["rr_text"], (data) => {

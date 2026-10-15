@@ -2,16 +2,13 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- 모바일 전체화면 및 노치(Safe-area) 대응 뷰포트 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- PWA 및 모바일 홈 화면 앱 설치 설정 -->
+    <!-- PWA 파일명 manifest.json으로 정확히 1:1 매핑 -->
     <link rel="manifest" href="./manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
-    
-    <!-- 외신/외부 이미지 핫링크(403 엑박) 차단 방지 -->
     <meta name="referrer" content="no-referrer">
     
     <title>REAL READ - 3줄 몰입 리더</title>
@@ -41,7 +38,6 @@
             user-select: none;
         }
 
-        /* 텍스트 입력 영역 */
         #input-section {
             width: 100%;
             max-width: var(--reader-width);
@@ -116,7 +112,6 @@
 
         #apply-btn:active { background: #1e293b; }
 
-        /* 메인 리더 컨테이너 */
         #reader-container {
             width: 100%;
             max-width: var(--reader-width);
@@ -130,7 +125,6 @@
             overflow: visible;
         }
 
-        /* 양쪽 모서리 마우스 호버 손잡이 (PC 전용) */
         .resize-handle {
             position: absolute;
             top: 0;
@@ -198,7 +192,6 @@
 
         #width-tooltip.visible { opacity: 1; }
 
-        /* 3줄 포커스 뷰포트 */
         #viewport {
             height: 350px;
             position: relative;
@@ -293,7 +286,6 @@
             font-weight: 500;
         }
 
-        /* 컨트롤러 */
         #nav-controls {
             padding: 10px 16px;
             background: #f8fafc;
@@ -342,7 +334,6 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* 조그 셔틀 */
         #shuttle-wrapper {
             background: #ffffff;
             border-top: 1px solid #e2e8f0;
@@ -416,7 +407,6 @@
             opacity: 0.8;
         }
 
-        /* 모바일 최적화 미디어 쿼리 */
         @media (max-width: 640px) {
             :root {
                 --font-size: 1.2rem;
@@ -437,7 +427,6 @@
                 left: 16px;
             }
 
-            /* 모바일에서는 좌우 리사이즈 바 숨김 */
             .resize-handle {
                 display: none !important;
             }
@@ -469,7 +458,6 @@
     <div id="reader-container">
         <div id="width-tooltip">760px</div>
 
-        <!-- 좌측 리사이즈 손잡이 (PC 전용) -->
         <div class="resize-handle resize-handle-left" id="handle-left" title="좌우로 당겨 창 너비 조절">
             <div class="handle-pill">⋮</div>
         </div>
@@ -506,13 +494,11 @@
             </div>
         </div>
 
-        <!-- 우측 리사이즈 손잡이 (PC 전용) -->
         <div class="resize-handle resize-handle-right" id="handle-right" title="좌우로 당겨 창 너비 조절">
             <div class="handle-pill">⋮</div>
         </div>
     </div>
 
-    <!-- PWA 서비스 워커 등록 스크립트 -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
