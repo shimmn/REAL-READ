@@ -589,33 +589,31 @@ applyBtn.addEventListener('click', () => {
     loadText(customTextInput.value);
 });
 
-// ==========================================
-// 사용자 기록 무관 원클릭 앱 설치 (beforeinstallprompt)
-// ==========================================
+// 상시 앱 설치 버튼
 let deferredPrompt = null;
-
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    if (installAppBtn) {
-        installAppBtn.style.display = 'inline-flex';
-    }
 });
 
 if (installAppBtn) {
     installAppBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) {
-            alert("브라우저 메뉴(점 3개 또는 공유 버튼)에서 '홈 화면에 추가' 또는 '앱 설치'를 눌러주세요.");
-            return;
+        triggerHaptic(15);
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                installAppBtn.style.display = 'none';
+            }
+            deferredPrompt = null;
+        } else {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                alert("아이폰은 브라우저 하단 [공유 버튼(네모+화살표)]을 누른 뒤 [홈 화면에 추가]를 선택해 주세요!");
+            } else {
+                alert("브라우저 메뉴(점 3개)에서 [앱 설치] 또는 [홈 화면에 추가]를 눌러주세요.");
+            }
         }
-
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        
-        if (outcome === 'accepted') {
-            installAppBtn.style.display = 'none';
-        }
-        deferredPrompt = null;
     });
 }
 
@@ -627,24 +625,71 @@ window.addEventListener('appinstalled', () => {
 });
 
 // ==========================================
-// 안드로이드 Web Share Target & URL 파라미터 자동 로드
+// [모바일 기사 URL 자동 본문 추출 엔진]
 // ==========================================
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedTitle = urlParams.get('title') || '';
     const sharedText = urlParams.get('text') || '';
     const sharedUrl = urlParams.get('url') || '';
 
-    const combinedContent = [sharedTitle, sharedText, sharedUrl].filter(Boolean).join('\n\n');
-    
-    if (combinedContent.trim()) {
-        customTextInput.value = combinedContent;
-        loadText(combinedContent);
+    // 공유로 들어온 데이터에서 HTTP URL 주소 검출
+    let targetUrl = sharedUrl;
+    if (!targetUrl && sharedText) {
+        const urlMatch = sharedText.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) targetUrl = urlMatch[0];
+    }
+
+    // 1. 기사 URL이 감지된 경우: 백그라운드 파싱 실행
+    if (targetUrl) {
+        customTextInput.value = "기사 본문을 불러오는 중입니다...";
+        loadText("기사 본문을 불러오는 중입니다...\n잠시만 기다려 주세요.");
+
+        try {
+            // CORS 우회 무료 프록시를 통해 기사 원문 HTML 호출
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error("네트워크 응답 에러");
+            const html = await response.text();
+
+            // 가져온 HTML을 DOM 객체로 변환
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Mozilla Readability 엔진으로 메뉴/광고 날리고 본문만 정밀 파싱
+            if (typeof Readability !== 'undefined') {
+                const reader = new Readability(doc);
+                const article = reader.parse();
+
+                if (article && article.textContent && article.textContent.trim().length > 60) {
+                    const finalContent = `${article.title}\n\n${article.textContent.trim()}`;
+                    customTextInput.value = finalContent;
+                    loadText(finalContent);
+                    return;
+                }
+            }
+            throw new Error("본문 추출 불가");
+        } catch (err) {
+            // 방화벽/페이월이 걸려있는 사이트일 경우 안내 문구
+            const fallback = (sharedTitle ? sharedTitle + '\n\n' : '') + 
+                "⚠️ 보안/방화벽이 걸려있는 언론사 사이트입니다.\n기사 본문을 복사한 후 상단의 [📋 클립보드 붙여넣기]를 눌러주세요!\n\n" + targetUrl;
+            customTextInput.value = fallback;
+            loadText(fallback);
+        }
+
+    // 2. 텍스트가 직접 넘어왔거나 기본 실행인 경우
     } else {
-        loadText(customTextInput.value);
+        const combined = [sharedTitle, sharedText].filter(Boolean).join('\n\n');
+        if (combined.trim()) {
+            customTextInput.value = combined;
+            loadText(combined);
+        } else {
+            loadText(customTextInput.value);
+        }
     }
 });
 
+// PC 크롬 확장 프로그램 연동 유지
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(["rr_text"], (data) => {
         if (data && data.rr_text && data.rr_text.trim()) {

@@ -10,6 +10,9 @@
     <meta name="theme-color" content="#0f172a">
     <meta name="referrer" content="no-referrer">
     
+    <!-- 모바일 URL 자동 본문 파싱용 Mozilla Readability 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/readability/0.5.0/Readability.min.js"></script>
+
     <title>REAL READ - 3줄 몰입 리더</title>
     <style>
         :root {
@@ -100,7 +103,9 @@
         .sub-btn:active { background: #f1f5f9; }
 
         #install-app-btn {
-            display: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             background: #0f172a;
             color: #ffffff;
             border: 1px solid #0f172a;
@@ -459,7 +464,7 @@
         <textarea id="custom-text" placeholder="기사 텍스트를 붙여넣거나 아래 버튼을 누르세요...">한 단어씩 번쩍이며 지나가는 방식은 시선 고정 효과는 있지만 오랜 시간 집중할 때 눈의 피로도와 멀미를 유발할 수 있습니다.
 이제 3줄 단위로 문맥을 보존하며 읽는 새로운 몰입형 리더를 경험해 보세요.
 현재 읽고 있는 3줄만 또렷한 검은색으로 포커스되고, 나머지 주변 줄글은 은은한 회색으로 흐려집니다.
-창 테두리에 마우스를 올리면 나타나는 손잡이를 당겨 원하는 너비로 맞추거나, 하단 조그 셔틀을 조작해 보세요.</textarea>
+모바일에서 기사를 공유하면 자동으로 본문을 긁어와 이곳에 채워줍니다.</textarea>
         <div class="action-row">
             <button id="install-app-btn" class="sub-btn">📲 앱 설치</button>
             <button id="paste-btn" class="sub-btn">📋 클립보드 붙여넣기</button>
