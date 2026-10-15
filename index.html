@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REAL READ - 3줄 몰입 리더 & 조그 셔틀</title>
+    <style>
+        :root {
+            --font-size: 1.45rem;
+            --line-height: 2.1;
+            --reader-width: 760px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
+            color: #0f172a;
+            padding: 24px 16px;
+        }
+
+        #input-section {
+            width: 100%;
+            max-width: var(--reader-width);
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #custom-text {
+            width: 100%;
+            height: 75px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #1e293b;
+            resize: vertical;
+            outline: none;
+        }
+
+        #custom-text:focus {
+            border-color: #0f172a;
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+        }
+
+        #apply-btn {
+            align-self: flex-end;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #apply-btn:hover {
+            background: #1e293b;
+        }
+
+        /* 메인 리더 컨테이너 */
+        #reader-container {
+            width: 100%;
+            max-width: var(--reader-width);
+            min-width: 480px;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.05);
+            border: 1.5px solid #cbd5e1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: visible;
+        }
+
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 24px;
+            cursor: ew-resize;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .resize-handle-left {
+            left: -12px;
+        }
+
+        .resize-handle-right {
+            right: -12px;
+        }
+
+        .resize-handle .handle-pill {
+            width: 22px;
+            height: 64px;
+            background: #0f172a;
+            border: 2px solid #ffffff;
+            border-radius: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+            color: #ffffff;
+            font-size: 1.15rem;
+            font-weight: 900;
+            line-height: 1;
+            opacity: 0;
+            transform: scale(0.85);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            pointer-events: none;
+        }
+
+        .resize-handle:hover .handle-pill,
+        .resize-handle.resizing .handle-pill {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #reader-container.is-resizing {
+            border-color: #0f172a;
+            box-shadow: 0 16px 44px rgba(15, 23, 42, 0.16);
+        }
+
+        #width-tooltip {
+            position: absolute;
+            top: -36px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+        }
+
+        #width-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* 3줄 포커스 뷰포트 */
+        #viewport {
+            height: 380px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 40px;
+            border-radius: 20px 20px 0 0;
+        }
+
+        .fade-top, .fade-bottom {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 70px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .fade-top {
+            top: 0;
+            background: linear-gradient(to bottom, #ffffff 15%, rgba(255, 255, 255, 0));
+        }
+
+        .fade-bottom {
+            bottom: 0;
+            background: linear-gradient(to top, #ffffff 15%, rgba(255, 255, 255, 0));
+        }
+
+        #text-flow {
+            position: absolute;
+            width: calc(100% - 80px);
+            left: 40px;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            will-change: transform;
+        }
+
+        .line {
+            font-size: var(--font-size);
+            line-height: var(--line-height);
+            color: #cbd5e1;
+            font-weight: 400;
+            text-align: left;
+            word-break: keep-all;
+            transition: color 0.18s ease, font-weight 0.18s ease, opacity 0.18s ease;
+            opacity: 0.45;
+            cursor: pointer;
+        }
+
+        .line.active {
+            color: #0f172a;
+            font-weight: 600;
+            opacity: 1;
+        }
+
+        .line.image-line {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 0;
+            opacity: 0.35;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .line.image-line.active {
+            opacity: 1;
+        }
+
+        .line.image-line img {
+            max-width: 100%;
+            max-height: 240px;
+            object-fit: contain;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+            background: #f8fafc;
+        }
+
+        .image-caption {
+            margin-top: 8px;
+            font-size: 0.82rem;
+            color: #94a3b8;
+            text-align: center;
+            line-height: 1.4;
+            max-width: 90%;
+        }
+
+        .line.image-line.active .image-caption {
+            color: #475569;
+            font-weight: 500;
+        }
+
+        /* 컨트롤러 */
+        #nav-controls {
+            padding: 12px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 8px 13px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: #0f172a;
+            color: #ffffff;
+            border-color: #0f172a;
+        }
+
+        .nav-btn:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        #progress-counter {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #64748b;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #shuttle-wrapper {
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            padding: 12px 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            user-select: none;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .shuttle-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        #shuttle-track {
+            position: relative;
+            width: 100%;
+            height: 38px;
+            background: #f1f5f9;
+            border-radius: 19px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: none;
+            border: 1px solid #e2e8f0;
+        }
+
+        .shuttle-center-mark {
+            position: absolute;
+            left: 50%;
+            top: 15%;
+            bottom: 15%;
+            width: 2px;
+            background: #cbd5e1;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        #shuttle-thumb {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 46px;
+            height: 28px;
+            background: #0f172a;
+            border-radius: 14px;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            cursor: grab;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+            transition: background-color 0.15s;
+        }
+
+        #shuttle-thumb:active {
+            cursor: grabbing;
+            background: #1e293b;
+        }
+
+        .thumb-line {
+            width: 2px;
+            height: 12px;
+            background: #ffffff;
+            border-radius: 1px;
+            opacity: 0.8;
+        }
+
+        .instruction {
+            margin-top: 14px;
+            color: #64748b;
+            font-size: 0.86rem;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        kbd {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="input-section">
+        <textarea id="custom-text" placeholder="읽을 텍스트를 입력하세요...">한 단어씩 번쩍이며 지나가는 방식은 시선 고정 효과는 있지만 오랜 시간 집중할 때 눈의 피로도와 멀미를 유발할 수 있습니다.
+이제 3줄 단위로 문맥을 보존하며 읽는 새로운 몰입형 리더를 경험해 보세요.
+현재 읽고 있는 3줄만 또렷한 검은색으로 포커스되고, 나머지 주변 줄글은 은은한 회색으로 흐려집니다.
+키보드 상하 방향키나 화면의 3줄/1줄 단위 버튼, 또는 아래 조그 셔틀 슬라이더를 당겨 원하는 호흡으로 넘겨보세요.
+1줄씩 넘기더라도 멈추는 즉시 앞뒤 문맥 3줄이 선명하게 활성화되어 읽는 흐름이 편안하게 이어집니다.</textarea>
+        <button id="apply-btn">텍스트 적용하기</button>
+    </div>
+
+    <div id="reader-container">
+        <div id="width-tooltip">760px</div>
+
+        <div class="resize-handle resize-handle-left" id="handle-left" title="좌우로 당겨 창 너비 조절">
+            <div class="handle-pill">⋮</div>
+        </div>
+
+        <div id="viewport">
+            <div class="fade-top"></div>
+            <div id="text-flow"></div>
+            <div class="fade-bottom"></div>
+        </div>
+
+        <div id="nav-controls">
+            <div class="btn-group">
+                <button class="nav-btn" id="prev-3-btn">▲ 3줄</button>
+                <button class="nav-btn" id="prev-1-btn">▲ 1줄</button>
+                <button class="nav-btn" id="next-1-btn">▼ 1줄</button>
+                <button class="nav-btn" id="next-3-btn">▼ 3줄</button>
+            </div>
+            <span id="progress-counter">0 / 0 줄</span>
+        </div>
+
+        <div id="shuttle-wrapper">
+            <div class="shuttle-header">
+                <span>◀ 이전으로 (멀수록 빠름)</span>
+                <span>중앙 (정지)</span>
+                <span>다음으로 (멀수록 빠름) ▶</span>
+            </div>
+            <div id="shuttle-track">
+                <div class="shuttle-center-mark"></div>
+                <div id="shuttle-thumb">
+                    <div class="thumb-line"></div>
+                    <div class="thumb-line"></div>
+                    <div class="thumb-line"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="resize-handle resize-handle-right" id="handle-right" title="좌우로 당겨 창 너비 조절">
+            <div class="handle-pill">⋮</div>
+        </div>
+    </div>
+
+    <p class="instruction">
+        <strong>창 양쪽 가장자리에 마우스를 대면 나타나는 손잡이(⋮)를 잡고 당기면</strong> 창 너비를 조절할 수 있습니다.
+    </p>
+
+    <script src="app.js"></script>
+</body>
+</html>
