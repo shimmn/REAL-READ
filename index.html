@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#0f172a">
     <meta name="referrer" content="no-referrer">
     
-    <!-- 모질라 공식 Readability 라이브러리 -->
+    <!-- 과거 PC 확장 프로그램에서 검증된 모질라 공식 Readability 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/readability/0.5.0/Readability.min.js"></script>
 
     <title>REAL READ - 3줄 몰입 리더</title>
@@ -249,6 +249,7 @@
             will-change: transform;
         }
 
+        /* 외톨이 단어 꺾임 방지 (한글 가독성 보존) */
         .line {
             width: 100%;
             font-size: var(--font-size);
@@ -256,7 +257,8 @@
             color: #cbd5e1;
             font-weight: 400;
             text-align: left;
-            word-break: break-word;
+            word-break: keep-all;
+            overflow-wrap: break-word;
             transition: color 0.18s ease, font-weight 0.18s ease, opacity 0.18s ease;
             opacity: 0.38;
             cursor: pointer;
@@ -461,10 +463,10 @@
             <span class="input-title">입력 텍스트</span>
             <button id="toggle-input-btn" class="sub-btn" style="padding: 3px 8px; font-size: 0.74rem;">접기 ▲</button>
         </div>
-        <textarea id="custom-text" placeholder="기사 본문을 복사한 후 아래 붙여넣기 버튼을 누르세요...">한 단어씩 번쩍이며 지나가는 방식은 시선 고정 효과는 있지만 오랜 시간 집중할 때 눈의 피로도와 멀미를 유발할 수 있습니다.
+        <textarea id="custom-text" placeholder="기사 페이지를 복사한 후 아래 붙여넣기 버튼을 누르세요...">한 단어씩 번쩍이며 지나가는 방식은 시선 고정 효과는 있지만 오랜 시간 집중할 때 눈의 피로도와 멀미를 유발할 수 있습니다.
 이제 3줄 단위로 문맥을 보존하며 읽는 새로운 몰입형 리더를 경험해 보세요.
 현재 읽고 있는 3줄만 또렷한 검은색으로 포커스되고, 나머지 주변 줄글은 은은한 회색으로 흐려집니다.
-기사 전체를 복사해서 [클립보드 붙여넣기]를 누르면 Readability 엔진이 자동으로 본문만 쏙 발라냅니다.</textarea>
+기사 전체를 복사해서 [클립보드 붙여넣기]를 누르면 PC 확장 프로그램과 동일한 Readability 엔진이 본문만 깨끗하게 발라냅니다.</textarea>
         <div class="action-row">
             <button id="install-app-btn" class="sub-btn">📲 앱 설치</button>
             <button id="paste-btn" class="sub-btn">📋 클립보드 붙여넣기</button>

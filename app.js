@@ -47,42 +47,67 @@ function isImageIndex(idx) {
 }
 
 /**
- * [모질라 Readability 엔진 연동 본문 추출]
- * 복사된 HTML을 받아 광고, 메뉴, 댓글, 추천 기사를 완전히 소멸시킴
+ * [PC 확장 프로그램과 동일한 Readability 파이프라인]
+ * 1. DOM 노이즈 태그 선제거
+ * 2. Readability 엔진 파싱
+ * 3. 텍스트 라인 단위 2차 정제 (가 가, 기자구독 등 잔여 노이즈 소멸)
  */
-function extractWithReadability(htmlString, fallbackText) {
+function cleanArticleContent(htmlString, plainText) {
+    let rawText = "";
+
+    // 1단계: HTML이 있는 경우 Readability 엔진으로 본문 추출
     if (htmlString && typeof Readability !== 'undefined') {
         try {
             const parser = new DOMParser();
             const doc = parser.parseFromString(htmlString, 'text/html');
 
-            // 전형적인 언론사 잡음 태그 사전 제거
-            const noise = doc.querySelectorAll('header, footer, nav, aside, script, style, noscript, iframe, .ad, .banner, .reporter, .copyright, .recommend, [class*="relation"], [class*="share"]');
-            noise.forEach(el => el.remove());
+            // [확장 프로그램 background.js 동일 적용] 명백한 노이즈 태그 사전 삭제
+            const garbageSelectors = [
+                'header', 'footer', 'nav', 'aside', 'script', 'style', 'noscript', 'iframe', 'button',
+                '.ad', '.ads', '.banner', '.share', '.sns', '.comment', '.reply',
+                '.date', '.time', '.byline', '.reporter', '.copyright', '.recommend',
+                '[class*="font"]', '[class*="size"]', '[class*="zoom"]',
+                '[class*="article_info"]', '[class*="news_info"]',
+                '[class*="article-relation"]', '[class*="share-box"]', '[class*="reporter"]',
+                '[class*="recommend"]', '[class*="popular"]'
+            ];
+            garbageSelectors.forEach(sel => {
+                doc.querySelectorAll(sel).forEach(el => el.remove());
+            });
 
             const reader = new Readability(doc);
             const article = reader.parse();
 
             if (article && article.textContent && article.textContent.trim().length > 40) {
-                return (article.title ? article.title + "\n\n" : "") + article.textContent.trim();
+                rawText = (article.title ? article.title + "\n\n" : "") + article.textContent.trim();
             }
         } catch (e) {
             console.warn("Readability 파싱 실패:", e);
         }
     }
 
-    // fallback: 순수 텍스트만 들어온 경우의 정제 필터
-    if (!fallbackText) return "";
-    return fallbackText
-        .split('\n')
+    if (!rawText) {
+        rawText = plainText || "";
+    }
+
+    // 2단계: 텍스트 라인 단위 정밀 정제 (PC background.js 동일 로직)
+    const lines = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const cleanLines = lines
         .map(l => l.trim())
         .filter(l => {
             if (l.length <= 1) return false;
-            if (/^(구독|공유|댓글|좋아요|추천|목록|홈|로그인|닫기|글자크기|가\s*가|\+|\-)$/i.test(l)) return false;
-            if (/기자\s*구독|함께\s*볼만한|시끌동영상|많이\s*본\s*뉴스/i.test(l)) return false;
+            // UI 조작 단어 필터링 ('가 가', '닫기' 등)
+            if (/^(가\s*가|가\+|가\-|\+|닫기|목록|홈|구독|공유|좋아요|댓글|댓글쓰기)$/.test(l)) return false;
+            // 등록/수정 날짜 필터링
+            if (/^(등록|수정|입력|발행|송고)?\s*\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}/.test(l) && l.length < 40) return false;
+            // 저작권 고지 필터링
+            if (/(저작권자|무단\s*전재|재배포\s*금지|All\s*rights\s*reserved|ⓒ|&copy;)/i.test(l)) return false;
+            // 기자 구독, 관련 기사, 사이드바 쓰레기 줄 필터링
+            if (/(기자\s*구독|함께\s*볼만한|시끌동영상|많이\s*본\s*뉴스|추천\s*뉴스|관련기사)/i.test(l)) return false;
             return true;
-        })
-        .join('\n');
+        });
+
+    return cleanLines.join('\n\n');
 }
 
 /**
@@ -132,6 +157,9 @@ function fixBrokenLineBreaks(rawText) {
     return mergedParagraphs;
 }
 
+/**
+ * 3줄 몰입 리더용 줄바꿈 분할 (외톨이 단어 꺾임 방지)
+ */
 function splitIntoLines(text) {
     if (!text || !text.trim()) return [];
 
@@ -140,8 +168,10 @@ function splitIntoLines(text) {
 
     const actualWidth = readerContainer ? readerContainer.clientWidth : currentContainerWidth;
     const isMobile = window.innerWidth <= 640;
-    const charWidthFactor = isMobile ? 15.5 : 15.8;
-    const lineLimit = Math.max(22, Math.floor((actualWidth - 40) / charWidthFactor));
+    
+    // 폭에 맞춘 자연스러운 단어 수용치
+    const charWidthFactor = isMobile ? 18.5 : 20.0;
+    const lineLimit = Math.max(26, Math.floor((actualWidth - 60) / charWidthFactor));
 
     cleanedParagraphs.forEach(paragraph => {
         if (/^!\[.*?\]\(.*?\)$/.test(paragraph.trim())) {
@@ -166,7 +196,18 @@ function splitIntoLines(text) {
         }
     });
 
-    return resultLines;
+    // 1~2글자 조사/꼬리말이 홀로 아랫줄에 떨어지는 현상 병합
+    const balancedLines = [];
+    for (let i = 0; i < resultLines.length; i++) {
+        const line = resultLines[i];
+        if (line.length <= 2 && balancedLines.length > 0 && !line.startsWith('![')) {
+            balancedLines[balancedLines.length - 1] += ' ' + line;
+        } else {
+            balancedLines.push(line);
+        }
+    }
+
+    return balancedLines;
 }
 
 function loadText(text) {
@@ -572,7 +613,7 @@ window.addEventListener('resize', () => {
 });
 
 // ==========================================
-// [핵심] 클립보드 붙여넣기 시 Readability 엔진 가동
+// [핵심] 클립보드 붙여넣기 시 Readability 정제 구동
 // ==========================================
 if (pasteBtn) {
     pasteBtn.addEventListener('click', async () => {
@@ -598,7 +639,7 @@ if (pasteBtn) {
 
             const targetSource = htmlText || plainText;
             if (targetSource && targetSource.trim()) {
-                const cleaned = extractWithReadability(htmlText, plainText);
+                const cleaned = cleanArticleContent(htmlText, plainText);
                 customTextInput.value = cleaned;
                 loadText(cleaned);
                 triggerHaptic(20);
@@ -608,7 +649,7 @@ if (pasteBtn) {
         } catch (err) {
             try {
                 const fallback = await navigator.clipboard.readText();
-                const cleaned = extractWithReadability("", fallback);
+                const cleaned = cleanArticleContent("", fallback);
                 customTextInput.value = cleaned;
                 loadText(cleaned);
             } catch (e) {
@@ -628,10 +669,12 @@ if (toggleInputBtn) {
 }
 
 applyBtn.addEventListener('click', () => {
-    loadText(customTextInput.value);
+    const cleaned = cleanArticleContent("", customTextInput.value);
+    customTextInput.value = cleaned;
+    loadText(cleaned);
 });
 
-// 앱 설치 버튼
+// 원클릭 앱 설치
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -666,27 +709,4 @@ window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
 
-// 초기화
-window.addEventListener('DOMContentLoaded', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const sharedTitle = urlParams.get('title') || '';
-    const sharedText = urlParams.get('text') || '';
-
-    const combined = [sharedTitle, sharedText].filter(Boolean).join('\n\n');
-    if (combined.trim()) {
-        const cleaned = extractWithReadability("", combined);
-        customTextInput.value = cleaned;
-        loadText(cleaned);
-    } else {
-        loadText(customTextInput.value);
-    }
-});
-
-if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get(["rr_text"], (data) => {
-        if (data && data.rr_text && data.rr_text.trim()) {
-            customTextInput.value = data.rr_text;
-            loadText(data.rr_text);
-        }
-    });
-}
+//
