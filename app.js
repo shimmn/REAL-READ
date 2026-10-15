@@ -46,6 +46,48 @@ function isImageIndex(idx) {
     return lineElements[idx] && lineElements[idx].classList.contains('image-line');
 }
 
+/**
+ * [모질라 Readability 엔진 연동 본문 추출]
+ * 복사된 HTML을 받아 광고, 메뉴, 댓글, 추천 기사를 완전히 소멸시킴
+ */
+function extractWithReadability(htmlString, fallbackText) {
+    if (htmlString && typeof Readability !== 'undefined') {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlString, 'text/html');
+
+            // 전형적인 언론사 잡음 태그 사전 제거
+            const noise = doc.querySelectorAll('header, footer, nav, aside, script, style, noscript, iframe, .ad, .banner, .reporter, .copyright, .recommend, [class*="relation"], [class*="share"]');
+            noise.forEach(el => el.remove());
+
+            const reader = new Readability(doc);
+            const article = reader.parse();
+
+            if (article && article.textContent && article.textContent.trim().length > 40) {
+                return (article.title ? article.title + "\n\n" : "") + article.textContent.trim();
+            }
+        } catch (e) {
+            console.warn("Readability 파싱 실패:", e);
+        }
+    }
+
+    // fallback: 순수 텍스트만 들어온 경우의 정제 필터
+    if (!fallbackText) return "";
+    return fallbackText
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => {
+            if (l.length <= 1) return false;
+            if (/^(구독|공유|댓글|좋아요|추천|목록|홈|로그인|닫기|글자크기|가\s*가|\+|\-)$/i.test(l)) return false;
+            if (/기자\s*구독|함께\s*볼만한|시끌동영상|많이\s*본\s*뉴스/i.test(l)) return false;
+            return true;
+        })
+        .join('\n');
+}
+
+/**
+ * 문장 중간에 잘못 끊긴 엔터 복원
+ */
 function fixBrokenLineBreaks(rawText) {
     if (!rawText) return [];
 
@@ -515,22 +557,7 @@ function setupResizeHandle(handleEl, side) {
         if (widthTooltip) widthTooltip.classList.remove('visible');
         document.body.style.cursor = '';
 
-        const anchorTarget = allLines[currentLineIdx] || "";
-        const isImg = anchorTarget.startsWith('![');
-        const anchorWords = !isImg ? anchorTarget.trim().split(/\s+/).slice(0, 2).join(' ') : "";
-
         loadText(customTextInput.value);
-
-        let restoredIdx = 0;
-        if (isImg) {
-            const foundIdx = allLines.findIndex(line => line === anchorTarget);
-            if (foundIdx !== -1) restoredIdx = foundIdx;
-        } else if (anchorWords) {
-            const foundIdx = allLines.findIndex(line => line.includes(anchorWords));
-            if (foundIdx !== -1) restoredIdx = foundIdx;
-        }
-
-        goToLine(restoredIdx);
     };
 
     handleEl.addEventListener('pointerup', endResize);
@@ -541,37 +568,52 @@ setupResizeHandle(handleLeft, 'left');
 setupResizeHandle(handleRight, 'right');
 
 window.addEventListener('resize', () => {
-    const anchorTarget = allLines[currentLineIdx] || "";
-    const isImg = anchorTarget.startsWith('![');
-    const anchorWords = !isImg ? anchorTarget.trim().split(/\s+/).slice(0, 2).join(' ') : "";
-
     loadText(customTextInput.value);
-
-    let restoredIdx = 0;
-    if (isImg) {
-        const foundIdx = allLines.findIndex(line => line === anchorTarget);
-        if (foundIdx !== -1) restoredIdx = foundIdx;
-    } else if (anchorWords) {
-        const foundIdx = allLines.findIndex(line => line.includes(anchorWords));
-        if (foundIdx !== -1) restoredIdx = foundIdx;
-    }
-
-    goToLine(restoredIdx);
 });
 
+// ==========================================
+// [핵심] 클립보드 붙여넣기 시 Readability 엔진 가동
+// ==========================================
 if (pasteBtn) {
     pasteBtn.addEventListener('click', async () => {
         try {
-            const text = await navigator.clipboard.readText();
-            if (text && text.trim()) {
-                customTextInput.value = text;
-                loadText(text);
+            let htmlText = "";
+            let plainText = "";
+
+            if (navigator.clipboard && navigator.clipboard.read) {
+                const items = await navigator.clipboard.read();
+                for (const item of items) {
+                    if (item.types.includes('text/html')) {
+                        const blob = await item.getType('text/html');
+                        htmlText = await blob.text();
+                    }
+                    if (item.types.includes('text/plain')) {
+                        const blob = await item.getType('text/plain');
+                        plainText = await blob.text();
+                    }
+                }
+            } else {
+                plainText = await navigator.clipboard.readText();
+            }
+
+            const targetSource = htmlText || plainText;
+            if (targetSource && targetSource.trim()) {
+                const cleaned = extractWithReadability(htmlText, plainText);
+                customTextInput.value = cleaned;
+                loadText(cleaned);
                 triggerHaptic(20);
             } else {
-                alert("클립보드에 복사된 텍스트가 없습니다.");
+                alert("클립보드에 복사된 내용이 없습니다.");
             }
         } catch (err) {
-            alert("클립보드 접근 권한을 허용해 주세요.");
+            try {
+                const fallback = await navigator.clipboard.readText();
+                const cleaned = extractWithReadability("", fallback);
+                customTextInput.value = cleaned;
+                loadText(cleaned);
+            } catch (e) {
+                alert("클립보드 접근 권한을 허용해 주세요.");
+            }
         }
     });
 }
@@ -589,7 +631,7 @@ applyBtn.addEventListener('click', () => {
     loadText(customTextInput.value);
 });
 
-// 상시 앱 설치 버튼
+// 앱 설치 버튼
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -624,72 +666,22 @@ window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
 
-// ==========================================
-// [모바일 기사 URL 자동 본문 추출 엔진]
-// ==========================================
-window.addEventListener('DOMContentLoaded', async () => {
+// 초기화
+window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedTitle = urlParams.get('title') || '';
     const sharedText = urlParams.get('text') || '';
-    const sharedUrl = urlParams.get('url') || '';
 
-    // 공유로 들어온 데이터에서 HTTP URL 주소 검출
-    let targetUrl = sharedUrl;
-    if (!targetUrl && sharedText) {
-        const urlMatch = sharedText.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) targetUrl = urlMatch[0];
-    }
-
-    // 1. 기사 URL이 감지된 경우: 백그라운드 파싱 실행
-    if (targetUrl) {
-        customTextInput.value = "기사 본문을 불러오는 중입니다...";
-        loadText("기사 본문을 불러오는 중입니다...\n잠시만 기다려 주세요.");
-
-        try {
-            // CORS 우회 무료 프록시를 통해 기사 원문 HTML 호출
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error("네트워크 응답 에러");
-            const html = await response.text();
-
-            // 가져온 HTML을 DOM 객체로 변환
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            // Mozilla Readability 엔진으로 메뉴/광고 날리고 본문만 정밀 파싱
-            if (typeof Readability !== 'undefined') {
-                const reader = new Readability(doc);
-                const article = reader.parse();
-
-                if (article && article.textContent && article.textContent.trim().length > 60) {
-                    const finalContent = `${article.title}\n\n${article.textContent.trim()}`;
-                    customTextInput.value = finalContent;
-                    loadText(finalContent);
-                    return;
-                }
-            }
-            throw new Error("본문 추출 불가");
-        } catch (err) {
-            // 방화벽/페이월이 걸려있는 사이트일 경우 안내 문구
-            const fallback = (sharedTitle ? sharedTitle + '\n\n' : '') + 
-                "⚠️ 보안/방화벽이 걸려있는 언론사 사이트입니다.\n기사 본문을 복사한 후 상단의 [📋 클립보드 붙여넣기]를 눌러주세요!\n\n" + targetUrl;
-            customTextInput.value = fallback;
-            loadText(fallback);
-        }
-
-    // 2. 텍스트가 직접 넘어왔거나 기본 실행인 경우
+    const combined = [sharedTitle, sharedText].filter(Boolean).join('\n\n');
+    if (combined.trim()) {
+        const cleaned = extractWithReadability("", combined);
+        customTextInput.value = cleaned;
+        loadText(cleaned);
     } else {
-        const combined = [sharedTitle, sharedText].filter(Boolean).join('\n\n');
-        if (combined.trim()) {
-            customTextInput.value = combined;
-            loadText(combined);
-        } else {
-            loadText(customTextInput.value);
-        }
+        loadText(customTextInput.value);
     }
 });
 
-// PC 크롬 확장 프로그램 연동 유지
 if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(["rr_text"], (data) => {
         if (data && data.rr_text && data.rr_text.trim()) {
