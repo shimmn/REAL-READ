@@ -12,7 +12,6 @@ const progressCounter = document.getElementById('progress-counter');
 const customTextInput = document.getElementById('custom-text');
 const applyBtn = document.getElementById('apply-btn');
 const pasteBtn = document.getElementById('paste-btn');
-const toggleInputBtn = document.getElementById('toggle-input-btn');
 const installAppBtn = document.getElementById('install-app-btn');
 
 const shuttleTrack = document.getElementById('shuttle-track');
@@ -36,83 +35,10 @@ let shuttleOffset = 0;
 let shuttlePixelOffset = 0;
 let isCoastingToStop = false;
 
-function triggerHaptic(duration = 10) {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(duration); } catch (e) {}
-    }
-}
-
 function isImageIndex(idx) {
     return lineElements[idx] && lineElements[idx].classList.contains('image-line');
 }
 
-/**
- * [PC 확장 프로그램과 동일한 Readability 파이프라인]
- * 1. DOM 노이즈 태그 선제거
- * 2. Readability 엔진 파싱
- * 3. 텍스트 라인 단위 2차 정제 (가 가, 기자구독 등 잔여 노이즈 소멸)
- */
-function cleanArticleContent(htmlString, plainText) {
-    let rawText = "";
-
-    // 1단계: HTML이 있는 경우 Readability 엔진으로 본문 추출
-    if (htmlString && typeof Readability !== 'undefined') {
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlString, 'text/html');
-
-            // [확장 프로그램 background.js 동일 적용] 명백한 노이즈 태그 사전 삭제
-            const garbageSelectors = [
-                'header', 'footer', 'nav', 'aside', 'script', 'style', 'noscript', 'iframe', 'button',
-                '.ad', '.ads', '.banner', '.share', '.sns', '.comment', '.reply',
-                '.date', '.time', '.byline', '.reporter', '.copyright', '.recommend',
-                '[class*="font"]', '[class*="size"]', '[class*="zoom"]',
-                '[class*="article_info"]', '[class*="news_info"]',
-                '[class*="article-relation"]', '[class*="share-box"]', '[class*="reporter"]',
-                '[class*="recommend"]', '[class*="popular"]'
-            ];
-            garbageSelectors.forEach(sel => {
-                doc.querySelectorAll(sel).forEach(el => el.remove());
-            });
-
-            const reader = new Readability(doc);
-            const article = reader.parse();
-
-            if (article && article.textContent && article.textContent.trim().length > 40) {
-                rawText = (article.title ? article.title + "\n\n" : "") + article.textContent.trim();
-            }
-        } catch (e) {
-            console.warn("Readability 파싱 실패:", e);
-        }
-    }
-
-    if (!rawText) {
-        rawText = plainText || "";
-    }
-
-    // 2단계: 텍스트 라인 단위 정밀 정제 (PC background.js 동일 로직)
-    const lines = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-    const cleanLines = lines
-        .map(l => l.trim())
-        .filter(l => {
-            if (l.length <= 1) return false;
-            // UI 조작 단어 필터링 ('가 가', '닫기' 등)
-            if (/^(가\s*가|가\+|가\-|\+|닫기|목록|홈|구독|공유|좋아요|댓글|댓글쓰기)$/.test(l)) return false;
-            // 등록/수정 날짜 필터링
-            if (/^(등록|수정|입력|발행|송고)?\s*\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}/.test(l) && l.length < 40) return false;
-            // 저작권 고지 필터링
-            if (/(저작권자|무단\s*전재|재배포\s*금지|All\s*rights\s*reserved|ⓒ|&copy;)/i.test(l)) return false;
-            // 기자 구독, 관련 기사, 사이드바 쓰레기 줄 필터링
-            if (/(기자\s*구독|함께\s*볼만한|시끌동영상|많이\s*본\s*뉴스|추천\s*뉴스|관련기사)/i.test(l)) return false;
-            return true;
-        });
-
-    return cleanLines.join('\n\n');
-}
-
-/**
- * 문장 중간에 잘못 끊긴 엔터 복원
- */
 function fixBrokenLineBreaks(rawText) {
     if (!rawText) return [];
 
@@ -157,21 +83,14 @@ function fixBrokenLineBreaks(rawText) {
     return mergedParagraphs;
 }
 
-/**
- * 3줄 몰입 리더용 줄바꿈 분할 (외톨이 단어 꺾임 방지)
- */
+// [원본 복원] 글자가 어색하게 깨지지 않던 원본 계산식 그대로 사용
 function splitIntoLines(text) {
     if (!text || !text.trim()) return [];
 
     const cleanedParagraphs = fixBrokenLineBreaks(text);
     const resultLines = [];
 
-    const actualWidth = readerContainer ? readerContainer.clientWidth : currentContainerWidth;
-    const isMobile = window.innerWidth <= 640;
-    
-    // 폭에 맞춘 자연스러운 단어 수용치
-    const charWidthFactor = isMobile ? 18.5 : 20.0;
-    const lineLimit = Math.max(26, Math.floor((actualWidth - 60) / charWidthFactor));
+    const lineLimit = Math.max(22, Math.floor((currentContainerWidth - 80) / 19));
 
     cleanedParagraphs.forEach(paragraph => {
         if (/^!\[.*?\]\(.*?\)$/.test(paragraph.trim())) {
@@ -196,18 +115,7 @@ function splitIntoLines(text) {
         }
     });
 
-    // 1~2글자 조사/꼬리말이 홀로 아랫줄에 떨어지는 현상 병합
-    const balancedLines = [];
-    for (let i = 0; i < resultLines.length; i++) {
-        const line = resultLines[i];
-        if (line.length <= 2 && balancedLines.length > 0 && !line.startsWith('![')) {
-            balancedLines[balancedLines.length - 1] += ' ' + line;
-        } else {
-            balancedLines.push(line);
-        }
-    }
-
-    return balancedLines;
+    return resultLines;
 }
 
 function loadText(text) {
@@ -232,14 +140,14 @@ function loadText(text) {
             const src = imgMatch[2];
 
             const img = document.createElement('img');
-            img.referrerPolicy = 'no-referrer';
             img.src = src;
             img.alt = alt;
             img.loading = 'lazy';
 
-            img.onerror = () => { img.style.display = 'none'; };
             img.onload = () => {
-                if (idx === currentLineIdx) goToLine(currentLineIdx);
+                if (idx === currentLineIdx) {
+                    goToLine(currentLineIdx);
+                }
             };
 
             div.appendChild(img);
@@ -328,16 +236,22 @@ function goToLine(targetIdx) {
 
 function stepNext(stepSize) {
     if (currentLineIdx >= lineElements.length - 1) return;
-    triggerHaptic(12);
 
-    if (stepSize === 1 || isImageIndex(currentLineIdx)) {
+    if (stepSize === 1) {
+        goToLine(currentLineIdx + 1);
+        return;
+    }
+
+    if (isImageIndex(currentLineIdx)) {
         goToLine(currentLineIdx + 1);
         return;
     }
 
     let currentLastActive = currentLineIdx;
     for (let i = currentLineIdx; i <= Math.min(lineElements.length - 1, currentLineIdx + 2); i++) {
-        if (lineElements[i].classList.contains('active')) currentLastActive = i;
+        if (lineElements[i].classList.contains('active')) {
+            currentLastActive = i;
+        }
     }
 
     let nextStart = currentLastActive + 1;
@@ -365,8 +279,6 @@ function stepNext(stepSize) {
 
 function stepPrev(stepSize) {
     if (currentLineIdx <= 0) return;
-    triggerHaptic(12);
-
     if (stepSize === 1 || isImageIndex(currentLineIdx)) {
         goToLine(currentLineIdx - 1);
         return;
@@ -409,12 +321,7 @@ function physicsLoop() {
             textFlow.style.transform = `translateY(${currentY}px)`;
             lineElements.forEach(el => el.classList.add('active'));
 
-            const newIdx = findClosestLineIdx(currentY);
-            if (newIdx !== currentLineIdx) {
-                currentLineIdx = newIdx;
-                triggerHaptic(6);
-            }
-
+            currentLineIdx = findClosestLineIdx(currentY);
             updateCounter();
             updateButtons();
 
@@ -481,28 +388,6 @@ viewport.addEventListener('wheel', (e) => {
     setTimeout(() => { wheelCooldown = false; }, 160);
 }, { passive: false });
 
-let touchStartY = 0;
-let touchStartX = 0;
-
-viewport.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-        touchStartY = e.touches[0].clientY;
-        touchStartX = e.touches[0].clientX;
-    }
-}, { passive: true });
-
-viewport.addEventListener('touchend', (e) => {
-    if (e.changedTouches.length === 1) {
-        const deltaY = e.changedTouches[0].clientY - touchStartY;
-        const deltaX = e.changedTouches[0].clientX - touchStartX;
-
-        if (Math.abs(deltaY) > 30 && Math.abs(deltaY) > Math.abs(deltaX)) {
-            if (deltaY < 0) stepNext(3);
-            else stepPrev(3);
-        }
-    }
-}, { passive: true });
-
 function handleShuttleMove(clientX) {
     const rect = shuttleTrack.getBoundingClientRect();
     const trackCenter = rect.left + rect.width / 2;
@@ -521,7 +406,6 @@ shuttleTrack.addEventListener('pointerdown', (e) => {
     isCoastingToStop = false;
     shuttleTrack.setPointerCapture(e.pointerId);
     handleShuttleMove(e.clientX);
-    triggerHaptic(15);
 });
 
 shuttleTrack.addEventListener('pointermove', (e) => {
@@ -546,6 +430,7 @@ const endShuttleDrag = (e) => {
 shuttleTrack.addEventListener('pointerup', endShuttleDrag);
 shuttleTrack.addEventListener('pointercancel', endShuttleDrag);
 
+// 리사이즈 드래그 핸들 이벤트
 let isResizing = false;
 let resizeSide = null;
 let startX = 0;
@@ -576,14 +461,19 @@ function setupResizeHandle(handleEl, side) {
         const deltaX = e.clientX - startX;
         let newWidth = initialWidth;
 
-        if (resizeSide === 'right') newWidth = initialWidth + deltaX * 2;
-        else newWidth = initialWidth - deltaX * 2;
+        if (resizeSide === 'right') {
+            newWidth = initialWidth + deltaX * 2;
+        } else {
+            newWidth = initialWidth - deltaX * 2;
+        }
 
         newWidth = Math.max(480, Math.min(1200, Math.round(newWidth)));
         currentContainerWidth = newWidth;
         document.documentElement.style.setProperty('--reader-width', `${newWidth}px`);
 
-        if (widthTooltip) widthTooltip.textContent = `${newWidth}px`;
+        if (widthTooltip) {
+            widthTooltip.textContent = `${newWidth}px`;
+        }
     });
 
     const endResize = (e) => {
@@ -598,7 +488,27 @@ function setupResizeHandle(handleEl, side) {
         if (widthTooltip) widthTooltip.classList.remove('visible');
         document.body.style.cursor = '';
 
+        const anchorTarget = allLines[currentLineIdx] || "";
+        const isImg = anchorTarget.startsWith('![');
+        const anchorWords = !isImg ? anchorTarget.trim().split(/\s+/).slice(0, 2).join(' ') : "";
+
         loadText(customTextInput.value);
+
+        let restoredIdx = 0;
+        if (isImg) {
+            const foundIdx = allLines.findIndex(line => line === anchorTarget);
+            if (foundIdx !== -1) restoredIdx = foundIdx;
+        } else if (anchorWords) {
+            const foundIdx = allLines.findIndex(line => line.includes(anchorWords));
+            if (foundIdx !== -1) restoredIdx = foundIdx;
+            else {
+                const firstWord = anchorWords.split(' ')[0];
+                const fallbackIdx = allLines.findIndex(line => line.includes(firstWord));
+                if (fallbackIdx !== -1) restoredIdx = fallbackIdx;
+            }
+        }
+
+        goToLine(restoredIdx);
     };
 
     handleEl.addEventListener('pointerup', endResize);
@@ -608,13 +518,60 @@ function setupResizeHandle(handleEl, side) {
 setupResizeHandle(handleLeft, 'left');
 setupResizeHandle(handleRight, 'right');
 
-window.addEventListener('resize', () => {
+applyBtn.addEventListener('click', () => {
     loadText(customTextInput.value);
 });
 
+function applyExtractedText(text) {
+    if (!text || !text.trim()) return;
+    customTextInput.value = text;
+    loadText(text);
+}
+
 // ==========================================
-// [핵심] 클립보드 붙여넣기 시 Readability 정제 구동
+// [background.js와 동일한 Readability 추출 함수]
 // ==========================================
+function parseContentWithReadability(htmlString, plainText) {
+    if (htmlString && typeof Readability !== 'undefined') {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlString, "text/html");
+            const reader = new Readability(doc);
+            const article = reader.parse();
+
+            if (article && article.content) {
+                const articleDoc = parser.parseFromString(article.content, "text/html");
+                const blocks = [];
+
+                function walk(node) {
+                    if (!node) return;
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        const tag = node.tagName.toLowerCase();
+                        if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li'].includes(tag)) {
+                            const text = node.textContent.trim();
+                            if (text) blocks.push(text);
+                            return;
+                        }
+                        for (const child of node.childNodes) {
+                            walk(child);
+                        }
+                    }
+                }
+                walk(articleDoc.body);
+
+                const title = article.title ? article.title.trim() : "";
+                const bodyContent = blocks.join("\n\n");
+                const cleanResult = title ? `${title}\n\n${bodyContent}` : bodyContent;
+                if (cleanResult.trim()) return cleanResult;
+            }
+        } catch (e) {
+            console.error("Readability 파싱 실패:", e);
+        }
+    }
+    return plainText || "";
+}
+
+// [클립보드 붙여넣기 버튼]
 if (pasteBtn) {
     pasteBtn.addEventListener('click', async () => {
         try {
@@ -637,21 +594,16 @@ if (pasteBtn) {
                 plainText = await navigator.clipboard.readText();
             }
 
-            const targetSource = htmlText || plainText;
-            if (targetSource && targetSource.trim()) {
-                const cleaned = cleanArticleContent(htmlText, plainText);
-                customTextInput.value = cleaned;
-                loadText(cleaned);
-                triggerHaptic(20);
+            const cleanText = parseContentWithReadability(htmlText, plainText);
+            if (cleanText && cleanText.trim()) {
+                applyExtractedText(cleanText);
             } else {
                 alert("클립보드에 복사된 내용이 없습니다.");
             }
         } catch (err) {
             try {
                 const fallback = await navigator.clipboard.readText();
-                const cleaned = cleanArticleContent("", fallback);
-                customTextInput.value = cleaned;
-                loadText(cleaned);
+                applyExtractedText(fallback);
             } catch (e) {
                 alert("클립보드 접근 권한을 허용해 주세요.");
             }
@@ -659,22 +611,7 @@ if (pasteBtn) {
     });
 }
 
-if (toggleInputBtn) {
-    let isCollapsed = false;
-    toggleInputBtn.addEventListener('click', () => {
-        isCollapsed = !isCollapsed;
-        customTextInput.style.display = isCollapsed ? 'none' : 'block';
-        toggleInputBtn.textContent = isCollapsed ? '펼치기 ▼' : '접기 ▲';
-    });
-}
-
-applyBtn.addEventListener('click', () => {
-    const cleaned = cleanArticleContent("", customTextInput.value);
-    customTextInput.value = cleaned;
-    loadText(cleaned);
-});
-
-// 원클릭 앱 설치
+// [PWA 앱 설치 버튼]
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -683,7 +620,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 if (installAppBtn) {
     installAppBtn.addEventListener('click', async () => {
-        triggerHaptic(15);
         if (deferredPrompt) {
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
@@ -692,21 +628,31 @@ if (installAppBtn) {
             }
             deferredPrompt = null;
         } else {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-            if (isIOS) {
-                alert("아이폰은 브라우저 하단 [공유 버튼(네모+화살표)]을 누른 뒤 [홈 화면에 추가]를 선택해 주세요!");
-            } else {
-                alert("브라우저 메뉴(점 3개)에서 [앱 설치] 또는 [홈 화면에 추가]를 눌러주세요.");
-            }
+            alert("브라우저 메뉴에서 '앱 설치' 또는 '홈 화면에 추가'를 눌러주세요.");
         }
     });
 }
 
 window.addEventListener('appinstalled', () => {
-    if (installAppBtn) {
-        installAppBtn.style.display = 'none';
-    }
+    if (installAppBtn) installAppBtn.style.display = 'none';
     deferredPrompt = null;
 });
 
-//
+// 초기 실행
+loadText(customTextInput.value);
+
+if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(["rr_text"], (data) => {
+        if (data && data.rr_text && data.rr_text.trim()) {
+            applyExtractedText(data.rr_text);
+        }
+    });
+
+    if (chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === "local" && changes.rr_text && changes.rr_text.newValue) {
+                applyExtractedText(changes.rr_text.newValue);
+            }
+        });
+    }
+}
