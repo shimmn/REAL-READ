@@ -39,48 +39,60 @@ function isImageIndex(idx) {
     return lineElements[idx] && lineElements[idx].classList.contains('image-line');
 }
 
+/**
+ * 웹에서 줄바꿈 없이 쫙 붙어서 들어온 텍스트를 문장 단위로 자동 분리 및 복원
+ */
 function fixBrokenLineBreaks(rawText) {
     if (!rawText) return [];
 
-    const normalized = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const rawParagraphs = normalized.split('\n');
-    const mergedParagraphs = [];
-    let buffer = "";
+    let text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 
-    rawParagraphs.forEach(line => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-            if (buffer) {
-                mergedParagraphs.push(buffer);
-                buffer = "";
+    // 1. 이미 문단(엔터) 구분이 잘 되어 있는 경우: 중간 끊김만 보정
+    if (text.includes('\n')) {
+        const rawParagraphs = text.split('\n');
+        const mergedParagraphs = [];
+        let buffer = "";
+
+        rawParagraphs.forEach(line => {
+            const trimmed = line.trim();
+            if (!trimmed) {
+                if (buffer) {
+                    mergedParagraphs.push(buffer);
+                    buffer = "";
+                }
+                return;
             }
-            return;
-        }
 
-        if (/^!\[.*?\]\(.*?\)$/.test(trimmed)) {
-            if (buffer) {
-                mergedParagraphs.push(buffer);
-                buffer = "";
+            if (/^!\[.*?\]\(.*?\)$/.test(trimmed)) {
+                if (buffer) {
+                    mergedParagraphs.push(buffer);
+                    buffer = "";
+                }
+                mergedParagraphs.push(trimmed);
+                return;
             }
-            mergedParagraphs.push(trimmed);
-            return;
-        }
 
-        if (!buffer) {
-            buffer = trimmed;
-        } else {
-            const isEndOfSentence = /[.?!'"”’]$/.test(buffer);
-            if (isEndOfSentence) {
-                mergedParagraphs.push(buffer);
+            if (!buffer) {
                 buffer = trimmed;
             } else {
-                buffer += " " + trimmed;
+                const isEndOfSentence = /[.?!'"”’]$/.test(buffer);
+                if (isEndOfSentence) {
+                    mergedParagraphs.push(buffer);
+                    buffer = trimmed;
+                } else {
+                    buffer += " " + trimmed;
+                }
             }
-        }
-    });
+        });
 
-    if (buffer) mergedParagraphs.push(buffer);
-    return mergedParagraphs;
+        if (buffer) mergedParagraphs.push(buffer);
+        return mergedParagraphs;
+    }
+
+    // 2. [핵심] 줄바꿈 없이 쫙 붙어서 한 덩어리로 들어온 경우:
+    // 온전한 문장 종결 부호 (. ? !) 뒤에서 강제로 문단 분리
+    text = text.replace(/([.?!]["”’']?)\s+/g, "$1\n\n");
+    return text.split('\n\n').map(p => p.trim()).filter(Boolean);
 }
 
 // [원본 복원] 글자가 어색하게 깨지지 않던 원본 계산식 그대로 사용
